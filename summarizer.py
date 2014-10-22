@@ -45,6 +45,6 @@ def summarize(url):
 
 
 if __name__ == "__main__":
-	url = raw_input("URL:")
+	url = raw_input("Search Term:")
 	url = "http://en.wikipedia.org/wiki/"+url
 	print summarize(url)
