@@ -4,7 +4,9 @@ This python script has been written in order to experiment with NLTK and impleme
 
 ## Usage
 Navigate to the folder via command line.
+
 	python summarizer.py
+    
 You will be prompted for a search term. Enter this and wait for the magic to happen.
 
 ## Dependencies
