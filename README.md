@@ -1,6 +1,7 @@
 summarizer
 ==========
 This python script has been written in order to experiment with NLTK and implement a summarizing algorithm for given text. 
+Adaptation of an article on [The Tokenizer](http://thetokenizer.com/2013/04/28/build-your-own-summary-tool/) and following [gist](https://gist.github.com/shlomibabluki/5473521)
 
 ## Usage
 Navigate to the folder via command line.
