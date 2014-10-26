@@ -1,10 +1,11 @@
+# -*- coding: utf-8 -*-
+
 from __future__ import division
 import re
 import numpy as np
 from goose import Goose
-import nltk.data
 from nltk.corpus import stopwords
-# from nltk.stem.porter import *
+from nltk.stem.porter import *
 from nltk.stem.snowball import *
 from nltk.tokenize import word_tokenize, sent_tokenize
 import sys
@@ -21,15 +22,17 @@ def splitToParagraphs(content):
       
 # get the intersection between two sentences
 def getIntersection(s1, s2):
+    global title
     s1 = set(s1)
     s2 = set(s2)
+    s3 = set(title)
     
     # if the sentences are empty the rank of this will be 0
     if (len(s1) + len(s2)) == 0:
         return 0
     
-    # return the length of the intersection divided by half the length of the two original sentences
-    return len(s1 & s2)/((len(s1) + len(s2))/2.)
+    # returning the score of the sentence s1 wrt s2
+    return len(s1 & s2 & s3)/((len(s1) + len(s2))/2)
     
 # create a key for an object from a sentence
 def sentenceKey(sentence):
@@ -56,60 +59,55 @@ def rankSentences(content):
             sentences.append(x)
         
     n = len(sentences)
-    # print sentences[:4]
     
     # stem and remove stopwords
-    # stemmer = PorterStemmer()
-    stemmer = SnowballStemmer("english")
-    clean_sentences = [stemAndRemoveStopWords(x, stemmer) for x in sentences]
+    stemmer = PorterStemmer()
+    # stemmer = SnowballStemmer("english")
+    cleanedSentences = [stemAndRemoveStopWords(x, stemmer) for x in sentences]
     
     # Create the sentence adjacency matrix
     values = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
-            values[i][j] = getIntersection(clean_sentences[i], clean_sentences[j])
+            values[i][j] = getIntersection(cleanedSentences[i], cleanedSentences[j])
     
-    # create sentence dictionary set and fill it with the accumulated value of each sentence
-    sentence_dictionary = {}
+    # create sentence adjacency matrix
     values = np.dot(values, (np.ones((n,n)) - np.eye(n)))
     score = np.sum(values, axis=1)
-    sentence_dictionary = {sentenceKey(sentences[i]):score[i] for i in range(n)}
-    
-    return sentence_dictionary
+    sentenceDictionary = {sentenceKey(sentences[i]):score[i] for i in range(n)}
+    thresholdScore = np.mean(score) + 0.3*np.std(score)
+    return sentenceDictionary, thresholdScore
 
 
 # get the best sentence from each paragraph
-def getBestSentence(paragraph, sentence_dictionary):
+def getBestSentences(paragraph, sentenceDictionary, thresholdScore):
     sentences = splitToSentences(paragraph)
     
-    # ignore sentences that are too short
-    # if len(sentences) < 2:
-    #     return ""
-     
-    best_sentence = ""
-    max_score = 0
+    bestSentence = ""
+    maxScore = 0
     
     # loop through each sentence and find it its value 
-    # in the sentence dictionary is the highest in the paragraph
     for s in sentences:
         key = sentenceKey(s)
         if key:
-            if sentence_dictionary[key] > max_score:
-                max_score = sentence_dictionary[key]
-                best_sentence = s
+            if sentenceDictionary[key] >= thresholdScore:
+                bestSentence += " " + s
+    # for s in sentences:
+    #     key = sentenceKey(s)
+    #     if key:
+    #         if sentenceDictionary[key] > maxScore:
+    #             maxScore = sentenceDictionary[key]
+    #             bestSentence = s
     
-    return best_sentence
+    return bestSentence
     
     
     
 # summarize the text    
-def summarize(content, sentence_dictionary):
+def summarize(content, sentenceDictionary, thresholdScore):
     global title
     paragraphs = splitToParagraphs(content)
     
-    # for para in paragraphs:
-    #     print para.encode('UTF-8')
-    #     raw_input()
     summary = []
     
     if title:
@@ -117,46 +115,47 @@ def summarize(content, sentence_dictionary):
         summary.append("")
     
     for p in paragraphs:
-        sentence = getBestSentence(p, sentence_dictionary).strip()
+        sentence = getBestSentences(p, sentenceDictionary, thresholdScore).strip()
         if sentence:
             summary.append(sentence)
     
     return ("\n").join(summary)
     
 
+# Summarize the content
+def doSummary(content): 
+    sentenceDictionary, thresholdScore = rankSentences(content)  
+    summary = summarize(content, sentenceDictionary, thresholdScore)
+    return summary
+
 # using the Goose library to extract the content of a url
-def get_content(url):    
+def getContent(url):    
     g = Goose()
     article = g.extract(url=url)
     
     return article.title, article.cleaned_text
 
-# Summarize the content
-def doSummary(content, max_len): 
-    sentence_dictionary = rankSentences(content)  
-    summary = summarize(content, sentence_dictionary)
-    return summary
-
-
 # grab the content of a url and return a summarized version of it
-def parseURL(url, max_len):
+def parseWebpage(url):
     global title
-    pat = ['/[.*/]', '[\n\s].*([0-9]+.)']#, '((\n|.\s+)[A-Za-z0-9]+/)\s+']
-    title, content = get_content(url)
+    pat = ['\[(.*?)\]', '[\n\s].*([0-9]+[.][^0-9])', '[\n\s].*([^a-zA-Z][a-z][/)])']
+    # reps = [('\xe2\x80\x93','-')]
+    title, content = getContent(url)
     for pattern in pat:
         content =   re.sub(pattern, "", content)
-
-    return doSummary(content, max_len)
+    # for rep in reps:
+    #     content = re.sub(rep[0],rep[1],content)
+    print "Original text size: ",len(content)
+    return doSummary(content)
 
 
 if __name__ == '__main__':
-    
     if len(sys.argv) > 1:
         url = sys.argv[1]
-        max_len = sys.argv[2]
     else:
-        url = "http://grad.berkeley.edu/admissions/apply/statement-purpose/"
-        max_len = 2500
+        # url = "https://medium.com/war-is-boring/one-easy-way-to-blow-7-6-billion-10b0933124f5"
+        url = "http://en.wikipedia.org/wiki/Github"
 
-    summary = parseURL(url, max_len)
+    summary = parseWebpage(url)
+    print "Summarized word size:%d\n" % len(summary)
     print summary.encode('UTF-8')
